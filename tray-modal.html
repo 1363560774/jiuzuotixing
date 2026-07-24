@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+            background: transparent;
+            overflow: hidden;
+        }
+        .card {
+            background: linear-gradient(160deg, #1e2a4a, #0f1e3d);
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 12px 10px;
+            width: 160px;
+            text-align: center;
+            color: #fff;
+            animation: slideIn 0.25s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-8px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .arrow {
+            width: 0; height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 5px solid rgba(255,255,255,0.12);
+            margin: 0 auto;
+            position: relative; top: 1px;
+        }
+        .emoji { font-size: 22px; display: inline-block; }
+        h2 { font-size: 11px; font-weight: 700; margin: 3px 0 2px; }
+        .desc { font-size: 9px; color: rgba(255,255,255,0.55); line-height: 1.4; margin-bottom: 8px; }
+
+        /* 休息倒计时 */
+        .rest-ring { position: relative; width: 60px; height: 60px; margin: 0 auto 8px; }
+        .rest-ring svg { transform: rotate(-90deg); }
+        .rest-ring circle { fill: none; stroke-width: 3; stroke-linecap: round; }
+        .rest-ring .bg { stroke: rgba(255,255,255,0.06); }
+        .rest-ring .fg { stroke: #2ecc71; transition: stroke-dashoffset 0.3s linear; }
+        .rest-ring .center {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%,-50%); text-align: center;
+        }
+        .rest-ring .center .time { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .rest-ring .center .lbl { font-size: 7px; color: rgba(255,255,255,0.5); }
+
+        .btns { display: flex; gap: 4px; }
+        .btn {
+            flex: 1; padding: 5px; border-radius: 6px; border: none;
+            font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: #fff;
+        }
+        .btn-primary:hover { opacity: 0.85; }
+        .btn-secondary {
+            background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    </style>
+</head>
+<body>
+    <!-- 久坐提醒视图 -->
+    <div id="sitView">
+        <div class="arrow"></div>
+        <div class="card">
+            <div class="emoji">🪑</div>
+            <h2>该站起来活动了！</h2>
+            <div class="desc">久坐时间过长<br>站起来放松一下</div>
+            <div class="btns">
+                <button class="btn btn-secondary" onclick="action('dismiss')">稍后</button>
+                <button class="btn btn-primary" onclick="action('stand')">休息</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 休息倒计时视图 -->
+    <div id="restView" style="display:none">
+        <div class="arrow"></div>
+        <div class="card">
+            <div class="emoji">🤸</div>
+            <h2>休息中...</h2>
+            <div class="rest-ring">
+                <svg width="60" height="60" viewBox="0 0 60 60">
+                    <circle class="bg" cx="30" cy="30" r="26" />
+                    <circle class="fg" cx="30" cy="30" r="26" id="restRing" />
+                </svg>
+                <div class="center">
+                    <div class="time" id="restTime">05:00</div>
+                    <div class="lbl">剩余</div>
+                </div>
+            </div>
+            <div class="btns">
+                <button class="btn btn-secondary" onclick="action('skip')">跳过</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const REST_R = 26;
+        const REST_C = 2 * Math.PI * REST_R;
+        document.getElementById('restRing').setAttribute('stroke-dasharray', REST_C);
+        document.getElementById('restRing').setAttribute('stroke-dashoffset', 0);
+
+        const { ipcRenderer } = require('electron');
+
+        function action(type) {
+            ipcRenderer.send('tray-action', type);
+        }
+
+        ipcRenderer.on('show-sit', () => {
+            document.getElementById('sitView').style.display = '';
+            document.getElementById('restView').style.display = 'none';
+        });
+
+        ipcRenderer.on('show-rest', (event, restRem, restDuration) => {
+            document.getElementById('sitView').style.display = 'none';
+            document.getElementById('restView').style.display = '';
+            updateRest(restRem, restDuration);
+        });
+
+        ipcRenderer.on('update-rest', (event, restRem, restDuration) => {
+            updateRest(restRem, restDuration);
+        });
+
+        function updateRest(restRem, restDuration) {
+            const sec = Math.max(0, restRem);
+            const m = String(Math.floor(sec / 60)).padStart(2, '0');
+            const s = String(sec % 60).padStart(2, '0');
+            document.getElementById('restTime').textContent = m + ':' + s;
+            const progress = restDuration > 0 ? sec / (restDuration * 60) : 0;
+            document.getElementById('restRing').style.strokeDashoffset = REST_C * (1 - progress);
+        }
+    </script>
+</body>
+</html>

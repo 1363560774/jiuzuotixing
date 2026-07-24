@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>久坐提醒</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+
+        :root {
+            --bg1: #1a1a2e; --bg2: #16213e;
+            --card: rgba(255,255,255,0.08);
+            --accent: #4a90d9; --highlight: #e94560;
+            --text: #fff; --text2: rgba(255,255,255,0.55);
+            --success: #2ecc71;
+            --border: rgba(255,255,255,0.1);
+        }
+
+        /* 窗口拖拽区域 */
+        .drag-bar {
+            position: fixed; top: 0; left: 0; right: 0;
+            height: 32px; z-index: 500;
+            -webkit-app-region: drag;
+            app-region: drag;
+        }
+        .drag-bar * { -webkit-app-region: no-drag; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+            background: linear-gradient(135deg, var(--bg1), var(--bg2));
+            color: var(--text);
+            height: 100vh; width: 100vw;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; padding: 16px;
+            padding-top: 36px;
+        }
+
+        .app {
+            width: 100%; max-width: 380px;
+            max-height: 100%;
+            background: var(--card);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px; border: 1px solid var(--border);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            padding: 20px;
+            display: flex; flex-direction: column;
+            gap: 14px;
+        }
+
+        /* 头部 */
+        .header { text-align: center; }
+        .header .emoji { font-size: 32px; }
+        .header h1 { font-size: 18px; font-weight: 700; margin-top: 2px; }
+        .header p { font-size: 11px; color: var(--text2); }
+
+        /* 进度环 */
+        .ring-wrap {
+            position: relative; width: 140px; height: 140px; margin: 0 auto;
+        }
+        .ring-wrap svg { transform: rotate(-90deg); }
+        .ring-wrap circle { fill: none; stroke-width: 5; stroke-linecap: round; }
+        .ring-wrap .bg { stroke: rgba(255,255,255,0.06); }
+        .ring-wrap .fg { stroke: url(#grad); transition: stroke-dashoffset 0.3s linear; }
+        .ring-center {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%,-50%); text-align: center;
+        }
+        .ring-center .time { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .ring-center .lbl { font-size: 10px; color: var(--text2); margin-top: 1px; }
+
+        /* 统计 */
+        .stats { display: flex; gap: 8px; }
+        .stat {
+            flex: 1; background: rgba(255,255,255,0.04);
+            border-radius: 10px; padding: 8px 4px; text-align: center;
+        }
+        .stat .v { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .stat .l { font-size: 9px; color: var(--text2); margin-top: 2px; }
+
+        /* 设置 */
+        .settings { display: flex; flex-direction: column; gap: 6px; }
+        .set-row {
+            display: flex; align-items: center; justify-content: space-between;
+            background: rgba(255,255,255,0.04); border-radius: 10px;
+            padding: 8px 12px; border: 1px solid transparent;
+        }
+        .set-row .info { display: flex; align-items: center; gap: 8px; }
+        .set-row .info .ic { font-size: 16px; }
+        .set-row .info .t { font-size: 13px; font-weight: 500; }
+        .set-row .info .d { font-size: 10px; color: var(--text2); }
+
+        .stepper { display: flex; align-items: center; gap: 6px; }
+        .stepper button {
+            width: 26px; height: 26px; border-radius: 7px;
+            border: 1px solid var(--border); background: rgba(255,255,255,0.06);
+            color: var(--text); font-size: 16px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+        }
+        .stepper button:hover { background: rgba(74,144,217,0.2); }
+        .stepper button:active { transform: scale(0.9); }
+        .stepper .val { min-width: 32px; text-align: center; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .stepper .unit { font-size: 10px; color: var(--text2); }
+
+        /* 开关 */
+        .toggle { position: relative; width: 40px; height: 24px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle .slider {
+            position: absolute; inset: 0; background: rgba(255,255,255,0.12);
+            border-radius: 12px; cursor: pointer; transition: 0.3s;
+        }
+        .toggle .slider::before {
+            content: ''; position: absolute; width: 18px; height: 18px;
+            border-radius: 50%; background: #fff; top: 3px; left: 3px;
+            transition: 0.3s; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .toggle input:checked + .slider { background: var(--success); }
+        .toggle input:checked + .slider::before { transform: translateX(16px); }
+
+        /* 按钮 */
+        .btns { display: flex; gap: 8px; }
+        .btn {
+            flex: 1; padding: 11px; border-radius: 11px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+        }
+        .btn-go {
+            background: linear-gradient(135deg, var(--accent), var(--highlight));
+            color: #fff; box-shadow: 0 3px 12px rgba(233,69,96,0.25);
+        }
+        .btn-go.active { background: linear-gradient(135deg, var(--success), #27ae60); box-shadow: 0 3px 12px rgba(46,204,113,0.25); }
+        .btn-go:hover { transform: translateY(-1px); }
+        .btn-rst {
+            background: rgba(255,255,255,0.08); color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-rst:hover { background: rgba(255,255,255,0.12); }
+
+        /* 弹窗 */
+        .overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .overlay.show { display: flex; }
+        .modal {
+            background: linear-gradient(160deg, #1e2a4a, #0f1e3d);
+            border-radius: 22px; padding: 28px 24px; max-width: 340px; width: 88%;
+            text-align: center; border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+            animation: pop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal .emoji { font-size: 48px; margin-bottom: 8px; display: inline-block; animation: bob 1.5s ease-in-out infinite; }
+        @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+        .modal p { font-size: 13px; color: var(--text2); margin-bottom: 18px; line-height: 1.5; }
+
+        .rest-ring { position: relative; width: 130px; height: 130px; margin: 0 auto 18px; }
+        .rest-ring svg { transform: rotate(-90deg); }
+        .rest-ring circle { fill: none; stroke-width: 4; stroke-linecap: round; }
+        .rest-ring .bg { stroke: rgba(255,255,255,0.06); }
+        .rest-ring .fg { stroke: var(--success); transition: stroke-dashoffset 0.3s linear; }
+        .rest-ring .center {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%,-50%); text-align: center;
+        }
+        .rest-ring .center .time { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .rest-ring .center .lbl { font-size: 10px; color: var(--text2); }
+
+        .m-btns { display: flex; gap: 8px; }
+        .m-btn {
+            flex: 1; padding: 12px; border-radius: 11px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+        }
+        .m-btn-p { background: linear-gradient(135deg, var(--success), #27ae60); color: #fff; box-shadow: 0 3px 12px rgba(46,204,113,0.25); }
+        .m-btn-p:hover { transform: translateY(-1px); }
+        .m-btn-s { background: rgba(255,255,255,0.08); color: var(--text2); border: 1px solid var(--border); }
+        .m-btn-s:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 16px; left: 50%;
+            transform: translateX(-50%) translateY(-80px);
+            background: rgba(46,204,113,0.95); color: #fff;
+            padding: 10px 20px; border-radius: 10px; font-size: 13px;
+            font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            z-index: 2000; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+            white-space: nowrap;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#4a90d9" />
+                <stop offset="100%" stop-color="#e94560" />
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <div class="drag-bar"></div>
+
+    <div class="app">
+        <div class="header">
+            <div class="emoji">🧘</div>
+            <h1>久坐提醒</h1>
+            <p>Stand Up Reminder</p>
+        </div>
+
+        <div class="ring-wrap">
+            <svg width="140" height="140" viewBox="0 0 140 140">
+                <circle class="bg" cx="70" cy="70" r="62" />
+                <circle class="fg" cx="70" cy="70" r="62" id="mainRing" />
+            </svg>
+            <div class="ring-center">
+                <div class="time" id="mainTime">--:--</div>
+                <div class="lbl" id="mainLbl">未开始</div>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat"><div class="v" id="sStand">0</div><div class="l">今日站立</div></div>
+            <div class="stat"><div class="v" id="sSit">0m</div><div class="l">久坐时长</div></div>
+            <div class="stat"><div class="v" id="sNext">--</div><div class="l">下次提醒</div></div>
+        </div>
+
+        <div class="settings">
+            <div class="set-row">
+                <div class="info">
+                    <span class="ic">⏰</span>
+                    <div><div class="t">久坐提醒间隔</div><div class="d">多久未活动后提醒</div></div>
+                </div>
+                <div class="stepper">
+                    <button onclick="adj('sit',-1)">−</button>
+                    <span class="val" id="sitVal">30</span><span class="unit">分</span>
+                    <button onclick="adj('sit',1)">+</button>
+                </div>
+            </div>
+            <div class="set-row">
+                <div class="info">
+                    <span class="ic">🤸</span>
+                    <div><div class="t">休息倒计时时长</div><div class="d">站立休息持续时间</div></div>
+                </div>
+                <div class="stepper">
+                    <button onclick="adj('rest',-1)">−</button>
+                    <span class="val" id="restVal">5</span><span class="unit">分</span>
+                    <button onclick="adj('rest',1)">+</button>
+                </div>
+            </div>
+            <div class="set-row">
+                <div class="info">
+                    <span class="ic">🔔</span>
+                    <div><div class="t">声音提醒</div></div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="sndTog" checked onchange="save()"><span class="slider"></span></label>
+            </div>
+            <div class="set-row">
+                <div class="info">
+                    <span class="ic">🔄</span>
+                    <div><div class="t">自动循环</div></div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="loopTog" checked onchange="save()"><span class="slider"></span></label>
+            </div>
+        </div>
+
+        <div class="btns">
+            <button class="btn btn-go" id="goBtn" onclick="toggle()"><span id="goTxt">开始监控</span></button>
+            <button class="btn btn-rst" onclick="reset()">重置</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Electron IPC 通信
+        const { ipcRenderer } = window.require ? window.require('electron') : null;
+
+        // 接收托盘弹窗的按钮操作
+        if (ipcRenderer) {
+            ipcRenderer.on('tray-action', (event, type) => {
+                if (type === 'dismiss') dismiss();
+                else if (type === 'stand') startRest();
+                else if (type === 'skip') skipRest();
+                else if (type === 'rest-done') finishRest();
+                else if (type === 'sit-time-up') showSit();
+            });
+            // 接收主进程同步的久坐剩余秒数
+            ipcRenderer.on('update-sit-sync', (event, sitRem) => {
+                S.sitRem = sitRem;
+                S.totalSit += 1 / 60;
+                updateMain(); updateStats();
+            });
+            // 接收主进程同步的休息剩余秒数
+            ipcRenderer.on('update-rest-sync', (event, restRem) => {
+                S.restRem = restRem;
+            });
+        }
+
+        // 进度环周长计算
+        const MAIN_R = 62;
+        const MAIN_C = 2 * Math.PI * MAIN_R;
+
+        // 初始化进度环
+        document.getElementById('mainRing').setAttribute('stroke-dasharray', MAIN_C);
+        document.getElementById('mainRing').setAttribute('stroke-dashoffset', MAIN_C);
+
+        const S = {
+            sitInterval: 30, restDuration: 5, sound: true, loop: true,
+            monitoring: false, sitRem: 0, restRem: 0,
+            phase: 'idle', standCount: 0, totalSit: 0,
+            sitId: null, restId: null,
+        };
+
+        function save() {
+            S.sitInterval = parseInt(document.getElementById('sitVal').textContent);
+            S.restDuration = parseInt(document.getElementById('restVal').textContent);
+            S.sound = document.getElementById('sndTog').checked;
+            S.loop = document.getElementById('loopTog').checked;
+            localStorage.setItem('sitReminder', JSON.stringify({
+                sitInterval: S.sitInterval, restDuration: S.restDuration,
+                sound: S.sound, loop: S.loop, standCount: S.standCount, totalSit: S.totalSit,
+            }));
+        }
+
+        function load() {
+            const raw = localStorage.getItem('sitReminder');
+            if (raw) {
+                const d = JSON.parse(raw);
+                S.sitInterval = d.sitInterval || 30;
+                S.restDuration = d.restDuration || 5;
+                S.sound = d.sound !== false;
+                S.loop = d.loop !== false;
+                S.standCount = d.standCount || 0;
+                S.totalSit = d.totalSit || 0;
+            }
+            document.getElementById('sitVal').textContent = S.sitInterval;
+            document.getElementById('restVal').textContent = S.restDuration;
+            document.getElementById('sndTog').checked = S.sound;
+            document.getElementById('loopTog').checked = S.loop;
+            updateStats();
+        }
+
+        function adj(key, delta) {
+            if (key === 'sit') {
+                S.sitInterval = Math.max(1, Math.min(180, S.sitInterval + delta));
+                document.getElementById('sitVal').textContent = S.sitInterval;
+            } else {
+                S.restDuration = Math.max(1, Math.min(30, S.restDuration + delta));
+                document.getElementById('restVal').textContent = S.restDuration;
+            }
+            save();
+            if (S.monitoring && S.phase === 'sitting') startSit();
+        }
+
+        function updateStats() {
+            document.getElementById('sStand').textContent = S.standCount;
+            const totalSec = Math.floor(S.totalSit * 60);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            document.getElementById('sSit').textContent =
+                String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        }
+
+        function fmt(sec) {
+            sec = Math.max(0, sec);
+            return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+        }
+
+        function updateMain() {
+            document.getElementById('mainTime').textContent = fmt(S.sitRem);
+            document.getElementById('mainLbl').textContent =
+                S.phase === 'sitting' ? '下次提醒' : S.phase === 'idle' ? '未开始' : '提醒中';
+            const total = S.sitInterval * 60;
+            const progress = total > 0 ? S.sitRem / total : 0;
+            document.getElementById('mainRing').style.strokeDashoffset = MAIN_C * (1 - progress);
+            if (S.phase === 'sitting') {
+                const d = new Date(Date.now() + S.sitRem * 1000);
+                document.getElementById('sNext').textContent =
+                    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            } else {
+                document.getElementById('sNext').textContent = '--';
+            }
+        }
+
+        function updateRest() {
+            // 休息倒计时显示在托盘弹窗中，由 IPC 更新
+        }
+
+        function startSit() {
+            S.sitRem = S.sitInterval * 60;
+            S.phase = 'sitting';
+            updateMain();
+            // 久坐计时交给主进程，避免窗口隐藏后被节流
+            if (ipcRenderer) {
+                ipcRenderer.send('start-sit-timer', S.sitInterval);
+            }
+        }
+
+        function toggle() {
+            if (S.monitoring) {
+                S.monitoring = false; S.phase = 'idle';
+                if (ipcRenderer) {
+                    ipcRenderer.send('stop-sit-timer');
+                }
+                document.getElementById('goTxt').textContent = '开始监控';
+                document.getElementById('goBtn').classList.remove('active');
+                S.sitRem = 0; updateMain();
+                toast('已停止监控');
+            } else {
+                S.monitoring = true;
+                document.getElementById('goTxt').textContent = '停止监控';
+                document.getElementById('goBtn').classList.add('active');
+                startSit(); toast('开始久坐监控');
+            }
+        }
+
+        function showSit() {
+            S.phase = 'reminding';
+            if (S.sound) beep();
+            updateMain();
+            // 通过 IPC 通知主进程在托盘图标下方弹出提醒
+            if (ipcRenderer) {
+                ipcRenderer.send('show-sit-reminder');
+            }
+        }
+
+        function dismiss() {
+            if (ipcRenderer) { ipcRenderer.send('hide-tray-window'); }
+            S.sitRem = S.sitInterval * 60; S.phase = 'sitting';
+            toast('将在' + S.sitInterval + '分钟后再次提醒');
+            if (ipcRenderer) {
+                ipcRenderer.send('restart-sit-timer', S.sitInterval);
+            }
+        }
+
+        function startRest() {
+            S.standCount++; updateStats(); save();
+            S.restRem = S.restDuration * 60; S.phase = 'resting';
+            // 通知主进程弹出休息倒计时（主进程接管倒计时，不受窗口隐藏节流影响）
+            if (ipcRenderer) {
+                ipcRenderer.send('show-rest-reminder', S.restRem, S.restDuration);
+            }
+        }
+
+        function skipRest() {
+            finishRest();
+        }
+
+        function finishRest() {
+            if (ipcRenderer) { ipcRenderer.send('hide-tray-window'); }
+            if (S.sound) chime();
+            toast('休息结束，继续加油！');
+            if (S.loop && S.monitoring) {
+                setTimeout(() => startSit(), 400);
+            } else {
+                S.phase = 'idle'; S.monitoring = false;
+                document.getElementById('goTxt').textContent = '开始监控';
+                document.getElementById('goBtn').classList.remove('active');
+                S.sitRem = 0; updateMain();
+            }
+        }
+
+        function reset() {
+            if (ipcRenderer) {
+                ipcRenderer.send('stop-sit-timer');
+                ipcRenderer.send('hide-tray-window');
+            }
+            if (S.monitoring) { startSit(); toast('计时已重置'); }
+            else { S.phase = 'idle'; S.sitRem = 0; updateMain(); }
+        }
+
+        let toastT = null;
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.classList.add('show');
+            if (toastT) clearTimeout(toastT);
+            toastT = setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        let actx = null;
+        function beep() {
+            try {
+                actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+                const now = actx.currentTime;
+                [0, 0.2, 0.4].forEach(d => {
+                    const o = actx.createOscillator(), g = actx.createGain();
+                    o.connect(g); g.connect(actx.destination);
+                    o.frequency.value = 880; o.type = 'sine';
+                    g.gain.setValueAtTime(0, now + d);
+                    g.gain.linearRampToValueAtTime(0.3, now + d + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + d + 0.15);
+                    o.start(now + d); o.stop(now + d + 0.15);
+                });
+            } catch (e) {}
+        }
+
+        function chime() {
+            try {
+                actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+                const now = actx.currentTime;
+                [523, 659, 784].forEach((f, i) => {
+                    const o = actx.createOscillator(), g = actx.createGain();
+                    o.connect(g); g.connect(actx.destination);
+                    o.frequency.value = f; o.type = 'sine';
+                    g.gain.setValueAtTime(0, now + i * 0.12);
+                    g.gain.linearRampToValueAtTime(0.25, now + i * 0.12 + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.2);
+                    o.start(now + i * 0.12); o.stop(now + i * 0.12 + 0.2);
+                });
+            } catch (e) {}
+        }
+
+        load();
+    </script>
+</body>
+</html>
