@@ -288,6 +288,7 @@
             });
             // 接收主进程同步的久坐剩余秒数
             ipcRenderer.on('update-sit-sync', (event, sitRem) => {
+                checkDayRollover();
                 S.sitRem = sitRem;
                 S.totalSit += 1 / 60;
                 updateMain(); updateStats();
@@ -310,8 +311,28 @@
             sitInterval: 30, restDuration: 5, sound: true, loop: true,
             monitoring: false, sitRem: 0, restRem: 0,
             phase: 'idle', standCount: 0, totalSit: 0,
+            curDate: todayStr(),
             sitId: null, restId: null,
         };
+
+        // 当天日期字符串（YYYY-MM-DD），用于按天重置统计
+        function todayStr() {
+            const d = new Date();
+            return d.getFullYear() + '-' +
+                String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                String(d.getDate()).padStart(2, '0');
+        }
+
+        // 跨天时重置「今日」统计（站立次数 / 久坐时长）
+        function checkDayRollover() {
+            const today = todayStr();
+            if (S.curDate !== today) {
+                S.curDate = today;
+                S.standCount = 0;
+                S.totalSit = 0;
+                updateStats();
+            }
+        }
 
         function save() {
             S.sitInterval = parseInt(document.getElementById('sitVal').textContent);
@@ -321,6 +342,7 @@
             localStorage.setItem('sitReminder', JSON.stringify({
                 sitInterval: S.sitInterval, restDuration: S.restDuration,
                 sound: S.sound, loop: S.loop, standCount: S.standCount, totalSit: S.totalSit,
+                date: S.curDate,
             }));
         }
 
@@ -334,7 +356,9 @@
                 S.loop = d.loop !== false;
                 S.standCount = d.standCount || 0;
                 S.totalSit = d.totalSit || 0;
+                S.curDate = d.date || todayStr();
             }
+            checkDayRollover();
             document.getElementById('sitVal').textContent = S.sitInterval;
             document.getElementById('restVal').textContent = S.restDuration;
             document.getElementById('sndTog').checked = S.sound;

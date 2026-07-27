@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build": "electron-builder --mac --win",
     "build:dir": "electron-builder --mac --dir"
   },
   "build": {
@@ -33,6 +35,24 @@
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "久坐提醒"
     },
     "afterPack": "./scripts/remove-quarantine.js",
     "dmg": {
