@@ -1,22 +1,15 @@
 name: Build Desktop Apps
 
-# 触发条件:
-#   1. 推送 v 开头的 tag（如 v1.0.0）→ 自动打包并发布 Release
-#   2. 在 Actions 页手动点按钮触发
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
 
-# 发布 Release 需要写仓库内容的权限
 permissions:
   contents: write
 
 jobs:
-  # ─────────────────────────────────────────────
-  # macOS: 打 dmg（arm64，对应 package.json 里的 mac.target）
-  # ─────────────────────────────────────────────
   build-mac:
     runs-on: macos-latest
     steps:
@@ -25,16 +18,15 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npx electron-builder --mac --publish never
+      # eb25 打完 dmg 后 hdiutil detach 清理报 busy(exit 1), 但 dmg 文件已完整生成。
+      # 用 "; ls" 忽略 detach 退出码, 改由 dmg 产物是否存在来判定成败。
+      - run: npx electron-builder --mac --publish never; ls dist/*.dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-zip
-          path: dist/*-mac.zip
-          if-no-files-found: error # 没打出 dmg 直接报错，避免静默失败
+          name: mac-dmg
+          path: dist/*.dmg
+          if-no-files-found: error
 
-  # ─────────────────────────────────────────────
-  # Windows: 打 nsis exe（x64，对应 package.json 里的 win.target）
-  # ─────────────────────────────────────────────
   build-win:
     runs-on: windows-latest
     steps:
@@ -50,22 +42,18 @@ jobs:
           path: dist/*.exe
           if-no-files-found: error
 
-  # ─────────────────────────────────────────────
-  # 发布到 GitHub Release：等上面两个 job 都跑完后,
-  # 把 dmg 和 exe 下载下来, 附加到该 tag 对应的 Release 页
-  # ─────────────────────────────────────────────
   release:
     needs: [build-mac, build-win]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          merge-multiple: true # 把 mac/win 两个 artifact 合并到同一目录
+          merge-multiple: true
           path: dist
       - name: 发布到 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true # 自动根据 commit 生成更新说明
+          generate_release_notes: true
           files: |
-            dist/*-mac.zip
+            dist/*.dmg
             dist/*.exe
