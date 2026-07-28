@@ -18,6 +18,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      # 单架构 native 打, 不交叉 x64, detach 不 busy, arm64 dmg 可靠产出
       - run: npx electron-builder --mac --arm64 --publish never || true; ls dist/*-arm64.dmg
       - uses: actions/upload-artifact@v4
         with:
@@ -33,6 +34,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      # x64 在 arm64 runner 交叉打, detach busy 但 dmg 仍生成, 用 || true; ls 兜底
       - run: npx electron-builder --mac --x64 --publish never || true; ls dist/*.dmg
       - uses: actions/upload-artifact@v4
         with:

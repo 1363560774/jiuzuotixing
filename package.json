@@ -1,6 +1,6 @@
 {
   "name": "stand-up-reminder",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "久坐提醒 - Stand Up Reminder",
   "author": "kai",
   "main": "main.js",
@@ -26,11 +26,7 @@
       "category": "public.app-category.healthcare-fitness",
       "target": [
         {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
+          "target": "dmg"
         }
       ],
       "darkModeSupport": true,
