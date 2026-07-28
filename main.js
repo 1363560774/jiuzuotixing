@@ -15,13 +15,21 @@ let sitRemain = 0;
 let sitInterval = 30;
 
 function createWindow() {
+    const isMac = process.platform === 'darwin';
+    // Windows 标题栏会占用约 30px 高度，适当加高；同时不超过可用工作区，
+    // 避免在高 DPI 缩放 / 小屏 Windows 上窗口高出屏幕、底部被裁切。
+    const workArea = screen.getPrimaryDisplay().workArea;
+    const baseHeight = isMac ? 680 : 720;
+    const winHeight = Math.min(baseHeight, workArea.height - 16);
+
     mainWindow = new BrowserWindow({
         width: 420,
-        height: 680,
+        height: winHeight,
         show: true,
         frame: true,
         title: '久坐提醒',
-        titleBarStyle: 'hiddenInset',
+        // hiddenInset 仅 macOS 生效；Windows/Linux 使用标准标题栏
+        titleBarStyle: isMac ? 'hiddenInset' : 'default',
         resizable: false,
         maximizable: false,
         fullscreenable: false,
@@ -87,14 +95,26 @@ function positionTrayWindow() {
     if (!trayWindow || !tray) return;
     const trayBounds = tray.getBounds();
     const winSize = trayWindow.getSize();
-    let x = Math.round(trayBounds.x + trayBounds.width / 2 - winSize[0] / 2);
-    let y = Math.round(trayBounds.y + trayBounds.height + 4);
     const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
     const workArea = display.workArea;
-    if (x < workArea.x) x = workArea.x;
-    if (x + winSize[0] > workArea.x + workArea.width) {
-        x = workArea.x + workArea.width - winSize[0];
+
+    // 水平：居中于托盘图标，并限制在工作区内
+    let x = Math.round(trayBounds.x + trayBounds.width / 2 - winSize[0] / 2);
+    x = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - winSize[0]));
+
+    // 垂直：托盘在屏幕上半部（macOS 菜单栏）→ 弹窗显示在图标下方；
+    //       托盘在屏幕下半部（Windows / Linux 任务栏）→ 弹窗显示在图标上方。
+    //       原实现固定“显示在下方”，在 Windows 上会把弹窗推到任务栏之下而不可见。
+    const trayMidY = trayBounds.y + trayBounds.height / 2;
+    let y;
+    if (trayMidY < workArea.y + workArea.height / 2) {
+        y = Math.round(trayBounds.y + trayBounds.height + 4); // 图标下方
+    } else {
+        y = Math.round(trayBounds.y - winSize[1] - 4);        // 图标上方
     }
+    // 兜底：始终限制在工作区内，保证弹窗完全可见
+    y = Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - winSize[1]));
+
     trayWindow.setPosition(x, y, false);
 }
 

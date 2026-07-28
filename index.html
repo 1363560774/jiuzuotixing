@@ -34,6 +34,10 @@
             overflow: hidden; padding: 16px;
             padding-top: 36px;
         }
+        /* Windows/Linux 有原生标题栏，无需为 macOS 拖拽栏预留顶部内边距 */
+        body.platform-win { padding-top: 16px; }
+        /* 窗口过矮（小屏 / 高 DPI 缩放）时允许内容滚动，避免底部按钮被裁切 */
+        @media (max-height: 660px) { .app { overflow-y: auto; } }
 
         .app {
             width: 100%; max-width: 380px;
@@ -276,6 +280,11 @@
     <script>
         // Electron IPC 通信
         const { ipcRenderer } = window.require ? window.require('electron') : null;
+
+        // 非 macOS（Windows/Linux）使用原生标题栏，收紧顶部内边距
+        if (window.process && process.platform && process.platform !== 'darwin') {
+            document.body.classList.add('platform-win');
+        }
 
         // 接收托盘弹窗的按钮操作
         if (ipcRenderer) {
