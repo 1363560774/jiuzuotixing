@@ -28,8 +28,8 @@ jobs:
       - run: npx electron-builder --mac --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-dmg
-          path: dist/*.dmg
+          name: mac-zip
+          path: dist/*-mac.zip
           if-no-files-found: error # 没打出 dmg 直接报错，避免静默失败
 
   # ─────────────────────────────────────────────
@@ -67,5 +67,5 @@ jobs:
         with:
           generate_release_notes: true # 自动根据 commit 生成更新说明
           files: |
-            dist/*.dmg
+            dist/*-mac.zip
             dist/*.exe
