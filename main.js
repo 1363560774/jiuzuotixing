@@ -1,6 +1,11 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 
+// Windows：设置 AppUserModelId，使任务栏正确关联本应用并显示自定义图标（避免默认/空白图标）
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.standup.reminder');
+}
+
 let mainWindow = null;
 let tray = null;
 let trayWindow = null;
@@ -135,15 +140,24 @@ function hideTrayWindow() {
 }
 
 function createTray() {
-    // 创建 16x16 的有效 PNG 图标（深色实心圆）
-    const icon = nativeImage.createFromBuffer(Buffer.from(
-        '89504e470d0a1a0a0000000d49484452000000100000001008060000001ff3ff610000001a49444154789c636001000000050001a5f645400000000049454e44ae426082',
-        'hex'
-    ));
-    icon.setTemplateImage(true);
+    // 使用应用图标作为托盘图标（macOS 菜单栏不再显示“久坐”文字）
+    const iconPath = path.join(__dirname, 'assets', 'jiuzuotixing.png');
+    let icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) {
+        // 兜底：16x16 深色实心圆模板图标
+        icon = nativeImage.createFromBuffer(Buffer.from(
+            '89504e470d0a1a0a0000000d49484452000000100000001008060000001ff3ff610000001a49444154789c636001000000050001a5f645400000000049454e44ae426082',
+            'hex'
+        ));
+        icon.setTemplateImage(true);
+    }
+
+    // macOS 菜单栏：图标过大，缩小到菜单栏常规尺寸（数值可按需调整）
+    if (process.platform === 'darwin') {
+        icon = icon.resize({ width: 18, height: 18 });
+    }
 
     tray = new Tray(icon);
-    tray.setTitle('久坐');
     tray.setToolTip('久坐提醒');
 
     updateTrayMenu();
