@@ -20,7 +20,8 @@
     "files": [
       "main.js",
       "index.html",
-      "tray-modal.html"
+      "tray-modal.html",
+      "assets/**"
     ],
     "mac": {
       "category": "public.app-category.healthcare-fitness",
@@ -32,7 +33,8 @@
       "darkModeSupport": true,
       "identity": null,
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "icon": "build/icon.icns"
     },
     "win": {
       "target": [
@@ -42,7 +44,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,

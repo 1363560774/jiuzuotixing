@@ -28,6 +28,8 @@ function createWindow() {
         show: true,
         frame: true,
         title: '久坐提醒',
+        // 运行时窗口图标（macOS 由 .icns 提供；Windows/Linux 显示在任务栏/标题栏）
+        icon: path.join(__dirname, 'assets', 'jiuzuotixing.png'),
         // hiddenInset 仅 macOS 生效；Windows/Linux 使用标准标题栏
         titleBarStyle: isMac ? 'hiddenInset' : 'default',
         resizable: false,
