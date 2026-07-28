@@ -20,7 +20,7 @@ jobs:
       - run: npm install
       # eb25 打完 dmg 后 hdiutil detach 清理报 busy(exit 1), 但 dmg 文件已完整生成。
       # 用 "; ls" 忽略 detach 退出码, 改由 dmg 产物是否存在来判定成败。
-      - run: npx electron-builder --mac --publish never; ls dist/*.dmg
+      - run: npx electron-builder --mac --publish never || true; ls dist/*.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg
