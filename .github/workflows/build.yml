@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build-mac:
+  build-mac-arm64:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,12 +18,25 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      # eb25 打完 dmg 后 hdiutil detach 清理报 busy(exit 1), 但 dmg 文件已完整生成。
-      # 用 "; ls" 忽略 detach 退出码, 改由 dmg 产物是否存在来判定成败。
-      - run: npx electron-builder --mac --publish never || true; ls dist/*.dmg
+      - run: npx electron-builder --mac --arm64 --publish never || true; ls dist/*-arm64.dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-dmg
+          name: mac-dmg-arm64
+          path: dist/*-arm64.dmg
+          if-no-files-found: error
+
+  build-mac-x64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx electron-builder --mac --x64 --publish never || true; ls dist/*.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg-x64
           path: dist/*.dmg
           if-no-files-found: error
 
@@ -43,7 +56,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [build-mac, build-win]
+    needs: [build-mac-arm64, build-mac-x64, build-win]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
