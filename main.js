@@ -320,6 +320,11 @@ if (!gotTheLock) {
     });
 
     app.whenReady().then(() => {
+        // Windows/Linux：移除默认应用菜单栏（File/Edit/View/Window/Help 等对本应用无效的项）
+        if (process.platform !== 'darwin') {
+            Menu.setApplicationMenu(null);
+        }
+
         createWindow();
         createTrayWindow();
         createTray();
