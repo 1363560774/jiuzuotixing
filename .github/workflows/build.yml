@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npx electron-builder --mac
+      - run: npx electron-builder --mac --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg
@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npx electron-builder --win
+      - run: npx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: win-exe

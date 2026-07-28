@@ -1,13 +1,14 @@
 {
   "name": "stand-up-reminder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "久坐提醒 - Stand Up Reminder",
+  "author": "kai",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build": "electron-builder --mac --win",
+    "build": "electron-builder --win",
     "build:dir": "electron-builder --mac --dir"
   },
   "build": {
@@ -74,6 +75,6 @@
   },
   "devDependencies": {
     "electron": "^31.7.7",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^25.0.0"
   }
 }
