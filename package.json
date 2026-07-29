@@ -21,7 +21,8 @@
       "main.js",
       "index.html",
       "tray-modal.html",
-      "assets/**"
+      "assets/**",
+      "updater.js"
     ],
     "mac": {
       "category": "public.app-category.healthcare-fitness",
@@ -70,10 +71,19 @@
           "path": "/Applications"
         }
       ]
-    }
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "1363560774",
+      "repo": "jiuzuotixing"
+    },
+    "artifactName": "stand-up-reminder-${version}-${arch}.${ext}"
   },
   "devDependencies": {
     "electron": "^31.7.7",
     "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

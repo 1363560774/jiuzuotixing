@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
+const updater = require('./updater');
 
 // Windows：设置 AppUserModelId，使任务栏正确关联本应用并显示自定义图标（避免默认/空白图标）
 if (process.platform === 'win32') {
@@ -194,6 +195,10 @@ function updateTrayMenu() {
                 }
             }
         },
+        {
+            label: '检查更新',
+            click: () => updater.checkUpdates(true)
+        },
         { type: 'separator' },
         {
             label: '退出',
@@ -328,6 +333,9 @@ if (!gotTheLock) {
         createWindow();
         createTrayWindow();
         createTray();
+
+        // 初始化检查更新（启动后自动检查一次）
+        updater.initUpdater(() => mainWindow);
 
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) {

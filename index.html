@@ -306,6 +306,8 @@
             ipcRenderer.on('update-rest-sync', (event, restRem) => {
                 S.restRem = restRem;
             });
+            // 更新检查结果 → toast
+            ipcRenderer.on('update-toast', (event, msg) => toast(msg));
         }
 
         // 进度环周长计算

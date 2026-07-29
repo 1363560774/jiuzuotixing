@@ -23,7 +23,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg-arm64
-          path: dist/*-arm64.dmg
+          path: |
+            dist/*-arm64.dmg
+            dist/*-arm64.dmg.blockmap
+            dist/latest-mac.yml
           if-no-files-found: error
 
   build-mac-x64:
@@ -39,7 +42,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg-x64
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
           if-no-files-found: error
 
   build-win:
@@ -54,7 +59,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: win-exe
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
           if-no-files-found: error
 
   release:
@@ -72,3 +80,6 @@ jobs:
           files: |
             dist/*.dmg
             dist/*.exe
+            dist/latest.yml
+            dist/latest-mac.yml
+            dist/*.blockmap
