@@ -163,15 +163,11 @@ function createTray() {
 
     updateTrayMenu();
 
-    // 点击托盘图标显示/隐藏主窗口
+    // 点击托盘图标：显示并聚焦主窗口（不再隐藏；隐藏请用窗口关闭按钮或托盘菜单）
     tray.on('click', () => {
         if (mainWindow) {
-            if (mainWindow.isVisible()) {
-                mainWindow.hide();
-            } else {
-                mainWindow.show();
-                mainWindow.focus();
-            }
+            mainWindow.show();
+            mainWindow.focus();
         }
     });
 }
