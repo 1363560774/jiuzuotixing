@@ -25,7 +25,7 @@ function createWindow() {
     // Windows 标题栏会占用约 30px 高度，适当加高；同时不超过可用工作区，
     // 避免在高 DPI 缩放 / 小屏 Windows 上窗口高出屏幕、底部被裁切。
     const workArea = screen.getPrimaryDisplay().workArea;
-    const baseHeight = isMac ? 680 : 720;
+    const baseHeight = isMac ? 730 : 770;
     const winHeight = Math.min(baseHeight, workArea.height - 16);
 
     mainWindow = new BrowserWindow({
@@ -217,22 +217,53 @@ ipcMain.on('show-sit-reminder', () => {
 });
 
 // IPC：渲染进程启动/停止久坐计时（主进程接管，不受窗口隐藏节流影响）
-ipcMain.on('start-sit-timer', (event, interval) => {
+// 监控时段配置（主进程据此决定是否计时）
+let sitWindow = { enabled: true, start: '09:00', end: '18:00' };
+
+function inWindow() {
+    if (!sitWindow.enabled) return true;
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = sitWindow.start.split(':').map(Number);
+    const [eh, em] = sitWindow.end.split(':').map(Number);
+    const st = sh * 60 + sm, en = eh * 60 + em;
+    return st <= en ? (cur >= st && cur < en) : (cur >= st || cur < en); // 支持跨夜时段
+}
+
+function tickSit() {
+    if (!inWindow()) {
+        // 时段外：倒计时重置为满，不累计久坐时长、不提醒
+        const full = sitInterval * 60;
+        if (sitRemain !== full) sitRemain = full;
+        if (mainWindow) mainWindow.webContents.send('sit-window-paused', sitRemain);
+        return;
+    }
+    sitRemain--;
+    if (mainWindow) mainWindow.webContents.send('update-sit-sync', sitRemain);
+    if (sitRemain <= 0) {
+        clearInterval(sitTimer);
+        sitTimer = null;
+        mainWindow.webContents.send('tray-action', 'sit-time-up');
+    }
+}
+
+function startSitTimer(interval) {
     sitInterval = interval;
     sitRemain = interval * 60;
     if (sitTimer) clearInterval(sitTimer);
-    sitTimer = setInterval(() => {
-        sitRemain--;
-        if (mainWindow) {
-            mainWindow.webContents.send('update-sit-sync', sitRemain);
-        }
-        if (sitRemain <= 0) {
-            clearInterval(sitTimer);
-            sitTimer = null;
-            // 通知渲染进程时间到了
-            mainWindow.webContents.send('tray-action', 'sit-time-up');
-        }
-    }, 1000);
+    sitTimer = setInterval(tickSit, 1000);
+}
+
+ipcMain.on('set-sit-window', (event, cfg) => {
+    if (cfg && typeof cfg === 'object') {
+        sitWindow.enabled = !!cfg.enabled;
+        if (cfg.start) sitWindow.start = String(cfg.start);
+        if (cfg.end) sitWindow.end = String(cfg.end);
+    }
+});
+
+ipcMain.on('start-sit-timer', (event, interval) => {
+    startSitTimer(interval);
 });
 
 ipcMain.on('stop-sit-timer', () => {
@@ -240,20 +271,7 @@ ipcMain.on('stop-sit-timer', () => {
 });
 
 ipcMain.on('restart-sit-timer', (event, interval) => {
-    sitInterval = interval;
-    sitRemain = interval * 60;
-    if (sitTimer) clearInterval(sitTimer);
-    sitTimer = setInterval(() => {
-        sitRemain--;
-        if (mainWindow) {
-            mainWindow.webContents.send('update-sit-sync', sitRemain);
-        }
-        if (sitRemain <= 0) {
-            clearInterval(sitTimer);
-            sitTimer = null;
-            mainWindow.webContents.send('tray-action', 'sit-time-up');
-        }
-    }, 1000);
+    startSitTimer(interval);
 });
 
 // IPC：渲染进程通知弹出休息倒计时，主进程接管倒计时

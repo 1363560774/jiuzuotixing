@@ -36,8 +36,11 @@
         }
         /* Windows/Linux 有原生标题栏，无需为 macOS 拖拽栏预留顶部内边距 */
         body.platform-win { padding-top: 16px; }
-        /* 窗口过矮（小屏 / 高 DPI 缩放）时允许内容滚动，避免底部按钮被裁切 */
-        @media (max-height: 660px) { .app { overflow-y: auto; } }
+        .set-row-wrap { flex-wrap: wrap; }
+        .timewin { display: flex; align-items: center; gap: 5px; }
+        .ti { width: 58px; font-size: 12px; padding: 2px 4px; text-align: center; border-radius: 6px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text); }
+        .ti::-webkit-calendar-picker-indicator { width: 0; padding: 0; margin: 0; opacity: 0; }
+        .tsep { color: var(--text2); font-size: 11px; }
 
         .app {
             width: 100%; max-width: 380px;
@@ -267,6 +270,18 @@
                 </div>
                 <label class="toggle"><input type="checkbox" id="loopTog" checked onchange="save()"><span class="slider"></span></label>
             </div>
+            <div class="set-row">
+                <div class="info">
+                    <span class="ic">🕘</span>
+                    <div><div class="t">监控时段</div></div>
+                </div>
+                <div class="timewin" id="timeWin">
+                    <input type="time" id="timeStart" class="ti" value="09:00" onchange="save()">
+                    <span class="tsep">~</span>
+                    <input type="time" id="timeEnd" class="ti" value="18:00" onchange="save()">
+                </div>
+                <label class="toggle"><input type="checkbox" id="timeTog" checked onchange="save()"><span class="slider"></span></label>
+            </div>
         </div>
 
         <div class="btns">
@@ -308,6 +323,14 @@
             });
             // 更新检查结果 → toast
             ipcRenderer.on('update-toast', (event, msg) => toast(msg));
+            // 时段外：主进程通知暂停并重置倒计时
+            ipcRenderer.on('sit-window-paused', (event, sitRem) => {
+                S.sitRem = sitRem;
+                document.getElementById('mainTime').textContent = fmt(sitRem);
+                document.getElementById('mainLbl').textContent = '时段外';
+                document.getElementById('mainRing').style.strokeDashoffset = MAIN_C;
+                document.getElementById('sNext').textContent = '--';
+            });
         }
 
         // 进度环周长计算
@@ -320,6 +343,7 @@
 
         const S = {
             sitInterval: 30, restDuration: 5, sound: true, loop: true,
+            timeLimit: true, timeStart: '09:00', timeEnd: '18:00',
             monitoring: false, sitRem: 0, restRem: 0,
             phase: 'idle', standCount: 0, totalSit: 0,
             curDate: todayStr(),
@@ -345,16 +369,31 @@
             }
         }
 
+        function sendWindow() {
+            if (ipcRenderer) ipcRenderer.send('set-sit-window', { enabled: S.timeLimit, start: S.timeStart, end: S.timeEnd });
+        }
         function save() {
             S.sitInterval = parseInt(document.getElementById('sitVal').textContent);
             S.restDuration = parseInt(document.getElementById('restVal').textContent);
             S.sound = document.getElementById('sndTog').checked;
             S.loop = document.getElementById('loopTog').checked;
+            S.timeLimit = document.getElementById('timeTog').checked;
+            S.timeStart = document.getElementById('timeStart').value || '09:00';
+            S.timeEnd = document.getElementById('timeEnd').value || '18:00';
+            // 开始时间必须早于结束时间，否则自动交换
+            if (S.timeStart >= S.timeEnd) {
+                const tmp = S.timeStart; S.timeStart = S.timeEnd; S.timeEnd = tmp;
+                document.getElementById('timeStart').value = S.timeStart;
+                document.getElementById('timeEnd').value = S.timeEnd;
+            }
+            const tw = document.getElementById('timeWin');
+            if (tw) tw.style.display = S.timeLimit ? '' : 'none';
             localStorage.setItem('sitReminder', JSON.stringify({
                 sitInterval: S.sitInterval, restDuration: S.restDuration,
                 sound: S.sound, loop: S.loop, standCount: S.standCount, totalSit: S.totalSit,
-                date: S.curDate,
+                date: S.curDate, timeLimit: S.timeLimit, timeStart: S.timeStart, timeEnd: S.timeEnd,
             }));
+            sendWindow();
         }
 
         function load() {
@@ -365,6 +404,9 @@
                 S.restDuration = d.restDuration || 5;
                 S.sound = d.sound !== false;
                 S.loop = d.loop !== false;
+                S.timeLimit = d.timeLimit !== false;
+                S.timeStart = d.timeStart || '09:00';
+                S.timeEnd = d.timeEnd || '18:00';
                 S.standCount = d.standCount || 0;
                 S.totalSit = d.totalSit || 0;
                 S.curDate = d.date || todayStr();
@@ -374,6 +416,14 @@
             document.getElementById('restVal').textContent = S.restDuration;
             document.getElementById('sndTog').checked = S.sound;
             document.getElementById('loopTog').checked = S.loop;
+            const ts = document.getElementById('timeStart');
+            const te = document.getElementById('timeEnd');
+            const tt = document.getElementById('timeTog');
+            if (ts) ts.value = S.timeStart;
+            if (te) te.value = S.timeEnd;
+            if (tt) tt.checked = S.timeLimit;
+            const tw = document.getElementById('timeWin');
+            if (tw) tw.style.display = S.timeLimit ? '' : 'none';
             updateStats();
         }
 
@@ -430,6 +480,7 @@
             updateMain();
             // 久坐计时交给主进程，避免窗口隐藏后被节流
             if (ipcRenderer) {
+                sendWindow();
                 ipcRenderer.send('start-sit-timer', S.sitInterval);
             }
         }
@@ -548,7 +599,22 @@
             } catch (e) {}
         }
 
+        // 每日 0 点重置今日统计
+        function scheduleMidnightReset() {
+            const now = new Date();
+            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5, 0);
+            setTimeout(() => {
+                checkDayRollover();
+                S.standCount = 0; S.totalSit = 0; S.curDate = todayStr();
+                updateStats(); save();
+                toast('新的一天，统计已重置');
+                scheduleMidnightReset();
+            }, next - now);
+        }
+
         load();
+        scheduleMidnightReset();
+        sendWindow();
     </script>
 </body>
 </html>
