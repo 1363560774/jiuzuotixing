@@ -37,7 +37,7 @@
         /* Windows/Linux 有原生标题栏，无需为 macOS 拖拽栏预留顶部内边距 */
         body.platform-win { padding-top: 16px; }
         .set-row-wrap { flex-wrap: wrap; }
-        .timewin { display: flex; align-items: center; gap: 5px; }
+        .timewin { display: flex; align-items: center; gap: 5px; padding-right: 24px; }
         .ti { width: 58px; font-size: 12px; padding: 2px 4px; text-align: center; border-radius: 6px; border: 1px solid var(--border); background: rgba(255,255,255,0.06); color: var(--text); }
         .ti::-webkit-calendar-picker-indicator { width: 0; padding: 0; margin: 0; opacity: 0; }
         .tsep { color: var(--text2); font-size: 11px; }
@@ -95,6 +95,8 @@
         .set-row .info .ic { font-size: 16px; }
         .set-row .info .t { font-size: 13px; font-weight: 500; }
         .set-row .info .d { font-size: 10px; color: var(--text2); }
+        /* 监控/非监控时段：固定标签宽度，使两行的时间输入竖向对齐（不受「监控时段/非监控时段」字数差影响）*/
+        .set-row-time .info { min-width: 110px; }
 
         .stepper { display: flex; align-items: center; gap: 6px; }
         .stepper button {
@@ -270,7 +272,7 @@
                 </div>
                 <label class="toggle"><input type="checkbox" id="loopTog" checked onchange="save()"><span class="slider"></span></label>
             </div>
-            <div class="set-row">
+            <div class="set-row set-row-time">
                 <div class="info">
                     <span class="ic">🕘</span>
                     <div><div class="t">监控时段</div></div>
@@ -282,7 +284,7 @@
                 </div>
                 <label class="toggle"><input type="checkbox" id="timeTog" checked onchange="save()"><span class="slider"></span></label>
             </div>
-            <div class="set-row">
+            <div class="set-row set-row-time">
                 <div class="info">
                     <span class="ic">🚫</span>
                     <div><div class="t">非监控时段</div></div>
