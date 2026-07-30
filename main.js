@@ -25,7 +25,7 @@ function createWindow() {
     // Windows 标题栏会占用约 30px 高度，适当加高；同时不超过可用工作区，
     // 避免在高 DPI 缩放 / 小屏 Windows 上窗口高出屏幕、底部被裁切。
     const workArea = screen.getPrimaryDisplay().workArea;
-    const baseHeight = isMac ? 730 : 770;
+    const baseHeight = isMac ? 790 : 830;
     const winHeight = Math.min(baseHeight, workArea.height - 16);
 
     mainWindow = new BrowserWindow({
@@ -217,17 +217,30 @@ ipcMain.on('show-sit-reminder', () => {
 });
 
 // IPC：渲染进程启动/停止久坐计时（主进程接管，不受窗口隐藏节流影响）
-// 监控时段配置（主进程据此决定是否计时）
-let sitWindow = { enabled: true, start: '09:00', end: '18:00' };
+// 监控时段配置（主进程据此决定是否计时）：一个监控时段 + 一个非监控时段
+let sitWindowEnabled = true;
+let sitStart = '09:00', sitEnd = '18:00';
+let sitExclEnabled = false;
+let sitExclStart = '12:00', sitExclEnd = '13:00';
+
+// 判断 cur（当天分钟数）是否落在 [start, end) 时段内，支持跨夜（start > end）
+function inRange(cur, start, end) {
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const st = sh * 60 + sm, en = eh * 60 + em;
+    return st <= en ? (cur >= st && cur < en) : (cur >= st || cur < en);
+}
 
 function inWindow() {
-    if (!sitWindow.enabled) return true;
+    // 监控时段总开关关闭：全天计时
+    if (!sitWindowEnabled) return true;
     const now = new Date();
     const cur = now.getHours() * 60 + now.getMinutes();
-    const [sh, sm] = sitWindow.start.split(':').map(Number);
-    const [eh, em] = sitWindow.end.split(':').map(Number);
-    const st = sh * 60 + sm, en = eh * 60 + em;
-    return st <= en ? (cur >= st && cur < en) : (cur >= st || cur < en); // 支持跨夜时段
+    // 不在监控时段内：不计时
+    if (!inRange(cur, sitStart, sitEnd)) return false;
+    // 命中非监控时段：不计时
+    if (sitExclEnabled && inRange(cur, sitExclStart, sitExclEnd)) return false;
+    return true;
 }
 
 function tickSit() {
@@ -256,9 +269,12 @@ function startSitTimer(interval) {
 
 ipcMain.on('set-sit-window', (event, cfg) => {
     if (cfg && typeof cfg === 'object') {
-        sitWindow.enabled = !!cfg.enabled;
-        if (cfg.start) sitWindow.start = String(cfg.start);
-        if (cfg.end) sitWindow.end = String(cfg.end);
+        sitWindowEnabled = !!cfg.enabled;
+        if (cfg.start) sitStart = String(cfg.start);
+        if (cfg.end) sitEnd = String(cfg.end);
+        sitExclEnabled = !!cfg.excl;
+        if (cfg.exclStart) sitExclStart = String(cfg.exclStart);
+        if (cfg.exclEnd) sitExclEnd = String(cfg.exclEnd);
     }
 });
 

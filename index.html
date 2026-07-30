@@ -282,6 +282,18 @@
                 </div>
                 <label class="toggle"><input type="checkbox" id="timeTog" checked onchange="save()"><span class="slider"></span></label>
             </div>
+            <div class="set-row">
+                <div class="info">
+                    <span class="ic">🚫</span>
+                    <div><div class="t">非监控时段</div></div>
+                </div>
+                <div class="timewin" id="exclWin">
+                    <input type="time" id="exclStart" class="ti" value="12:00" onchange="save()">
+                    <span class="tsep">~</span>
+                    <input type="time" id="exclEnd" class="ti" value="13:00" onchange="save()">
+                </div>
+                <label class="toggle"><input type="checkbox" id="exclTog" onchange="save()"><span class="slider"></span></label>
+            </div>
         </div>
 
         <div class="btns">
@@ -344,6 +356,7 @@
         const S = {
             sitInterval: 30, restDuration: 5, sound: true, loop: true,
             timeLimit: true, timeStart: '09:00', timeEnd: '18:00',
+            exclLimit: false, exclStart: '12:00', exclEnd: '13:00',
             monitoring: false, sitRem: 0, restRem: 0,
             phase: 'idle', standCount: 0, totalSit: 0,
             curDate: todayStr(),
@@ -370,7 +383,10 @@
         }
 
         function sendWindow() {
-            if (ipcRenderer) ipcRenderer.send('set-sit-window', { enabled: S.timeLimit, start: S.timeStart, end: S.timeEnd });
+            if (ipcRenderer) ipcRenderer.send('set-sit-window', {
+                enabled: S.timeLimit, start: S.timeStart, end: S.timeEnd,
+                excl: S.exclLimit, exclStart: S.exclStart, exclEnd: S.exclEnd,
+            });
         }
         function save() {
             S.sitInterval = parseInt(document.getElementById('sitVal').textContent);
@@ -380,18 +396,18 @@
             S.timeLimit = document.getElementById('timeTog').checked;
             S.timeStart = document.getElementById('timeStart').value || '09:00';
             S.timeEnd = document.getElementById('timeEnd').value || '18:00';
-            // 开始时间必须早于结束时间，否则自动交换
-            if (S.timeStart >= S.timeEnd) {
-                const tmp = S.timeStart; S.timeStart = S.timeEnd; S.timeEnd = tmp;
-                document.getElementById('timeStart').value = S.timeStart;
-                document.getElementById('timeEnd').value = S.timeEnd;
-            }
+            S.exclLimit = document.getElementById('exclTog').checked;
+            S.exclStart = document.getElementById('exclStart').value || '12:00';
+            S.exclEnd = document.getElementById('exclEnd').value || '13:00';
             const tw = document.getElementById('timeWin');
             if (tw) tw.style.display = S.timeLimit ? '' : 'none';
+            const ew = document.getElementById('exclWin');
+            if (ew) ew.style.display = S.exclLimit ? '' : 'none';
             localStorage.setItem('sitReminder', JSON.stringify({
                 sitInterval: S.sitInterval, restDuration: S.restDuration,
                 sound: S.sound, loop: S.loop, standCount: S.standCount, totalSit: S.totalSit,
                 date: S.curDate, timeLimit: S.timeLimit, timeStart: S.timeStart, timeEnd: S.timeEnd,
+                exclLimit: S.exclLimit, exclStart: S.exclStart, exclEnd: S.exclEnd,
             }));
             sendWindow();
         }
@@ -407,6 +423,14 @@
                 S.timeLimit = d.timeLimit !== false;
                 S.timeStart = d.timeStart || '09:00';
                 S.timeEnd = d.timeEnd || '18:00';
+                // 兼容多时段版本遗留的数据：取第一个时段作为监控时段
+                if (!d.timeStart && Array.isArray(d.timeWindows) && d.timeWindows[0]) {
+                    S.timeStart = d.timeWindows[0].start || '09:00';
+                    S.timeEnd = d.timeWindows[0].end || '18:00';
+                }
+                S.exclLimit = d.exclLimit === true; // 默认关闭
+                S.exclStart = d.exclStart || '12:00';
+                S.exclEnd = d.exclEnd || '13:00';
                 S.standCount = d.standCount || 0;
                 S.totalSit = d.totalSit || 0;
                 S.curDate = d.date || todayStr();
@@ -416,14 +440,20 @@
             document.getElementById('restVal').textContent = S.restDuration;
             document.getElementById('sndTog').checked = S.sound;
             document.getElementById('loopTog').checked = S.loop;
+            document.getElementById('timeTog').checked = S.timeLimit;
+            document.getElementById('exclTog').checked = S.exclLimit;
             const ts = document.getElementById('timeStart');
             const te = document.getElementById('timeEnd');
-            const tt = document.getElementById('timeTog');
             if (ts) ts.value = S.timeStart;
             if (te) te.value = S.timeEnd;
-            if (tt) tt.checked = S.timeLimit;
+            const es = document.getElementById('exclStart');
+            const ee = document.getElementById('exclEnd');
+            if (es) es.value = S.exclStart;
+            if (ee) ee.value = S.exclEnd;
             const tw = document.getElementById('timeWin');
             if (tw) tw.style.display = S.timeLimit ? '' : 'none';
+            const ew = document.getElementById('exclWin');
+            if (ew) ew.style.display = S.exclLimit ? '' : 'none';
             updateStats();
         }
 
