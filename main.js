@@ -25,7 +25,7 @@ function createWindow() {
     // Windows 标题栏会占用约 30px 高度，适当加高；同时不超过可用工作区，
     // 避免在高 DPI 缩放 / 小屏 Windows 上窗口高出屏幕、底部被裁切。
     const workArea = screen.getPrimaryDisplay().workArea;
-    const baseHeight = isMac ? 790 : 830;
+    const baseHeight = isMac ? 840 : 880;
     const winHeight = Math.min(baseHeight, workArea.height - 16);
 
     mainWindow = new BrowserWindow({
