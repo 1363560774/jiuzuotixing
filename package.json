@@ -1,6 +1,6 @@
 {
   "name": "stand-up-reminder",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "久坐提醒 - Stand Up Reminder",
   "author": "kai",
   "main": "main.js",
