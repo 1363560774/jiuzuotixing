@@ -222,6 +222,11 @@ let sitWindowEnabled = true;
 let sitStart = '09:00', sitEnd = '18:00';
 let sitExclEnabled = false;
 let sitExclStart = '12:00', sitExclEnd = '13:00';
+// 排除周期：off=全年（不按天排除）、weekend=双休（周六周日）、sunday=单休（周日）、holiday=法定节假日、altweek=大小周
+let sitCycle = 'off';
+// 大小周：altType=锚点周类型（big 大周/双休，small 小周/单休），altAnchor=锚点日（YYYY-MM-DD），每周自动翻转
+let sitAltType = 'big';
+let sitAltAnchor = null;
 
 // 判断 cur（当天分钟数）是否落在 [start, end) 时段内，支持跨夜（start > end）
 function inRange(cur, start, end) {
@@ -231,10 +236,78 @@ function inRange(cur, start, end) {
     return st <= en ? (cur >= st && cur < en) : (cur >= st || cur < en);
 }
 
+// 法定节假日（仅放假当日，不含调休上班日）。数据需逐年更新——国务院通常于前一年 11 月发布。
+// 2025、2026 为国务院官方公布；2027 为预测值，待官方通知发布后替换。
+const HOLIDAYS = new Set([
+    // 2025（官方）
+    '2025-01-01',
+    '2025-01-28','2025-01-29','2025-01-30','2025-01-31','2025-02-01','2025-02-02','2025-02-03','2025-02-04',
+    '2025-04-04','2025-04-05','2025-04-06',
+    '2025-05-01','2025-05-02','2025-05-03','2025-05-04','2025-05-05',
+    '2025-05-31','2025-06-01','2025-06-02',
+    '2025-10-01','2025-10-02','2025-10-03','2025-10-04','2025-10-05','2025-10-06','2025-10-07','2025-10-08',
+    // 2026（官方）
+    '2026-01-01','2026-01-02','2026-01-03',
+    '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
+    '2026-04-04','2026-04-05','2026-04-06',
+    '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
+    '2026-06-19','2026-06-20','2026-06-21',
+    '2026-09-25','2026-09-26','2026-09-27',
+    '2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06','2026-10-07',
+    // 2027（预测，非官方；待 2026 年底国务院通知发布后更新）
+    '2027-01-01','2027-01-02','2027-01-03',
+    '2027-02-05','2027-02-06','2027-02-07','2027-02-08','2027-02-09','2027-02-10','2027-02-11',
+    '2027-04-03','2027-04-04','2027-04-05',
+    '2027-05-01','2027-05-02','2027-05-03','2027-05-04','2027-05-05',
+    '2027-06-09',
+    '2027-09-15',
+    '2027-10-01','2027-10-02','2027-10-03','2027-10-04','2027-10-05','2027-10-06','2027-10-07',
+]);
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+// 判断给定日期是否为法定节假日（按 'YYYY-MM-DD' 匹配）
+function isHoliday(date) {
+    return HOLIDAYS.has(date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()));
+}
+
+// 取 date 所在周的周一（周一为一周起点）
+function mondayOf(date) {
+    const m = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+    return m;
+}
+
+// 大小周：以锚点周为基准，按经过的周数自动顺延交替（偶数周同型，奇数周翻转）
+function effectiveAltType(date) {
+    const t = sitAltType === 'small' ? 'small' : 'big';
+    if (!sitAltAnchor) return t;
+    const a = mondayOf(date), b = mondayOf(new Date(sitAltAnchor + 'T00:00:00'));
+    const weeks = Math.round((a.getTime() - b.getTime()) / (7 * 24 * 3600 * 1000));
+    return Math.abs(weeks) % 2 === 1 ? (t === 'big' ? 'small' : 'big') : t;
+}
+
 function inWindow() {
     // 监控时段总开关关闭：全天计时
     if (!sitWindowEnabled) return true;
     const now = new Date();
+    // 排除周期：按天排除（关=全年；双休=周六周日；单休=周日；节假日=法定节假日）
+    if (sitCycle === 'weekend') {
+        const dow = now.getDay(); // 0=周日，6=周六
+        if (dow === 0 || dow === 6) return false;
+    } else if (sitCycle === 'sunday') {
+        if (now.getDay() === 0) return false;
+    } else if (sitCycle === 'holiday') {
+        if (isHoliday(now)) return false;
+    } else if (sitCycle === 'altweek') {
+        // 大小周：大周=双休（周六周日），小周=单休（周日），按周自动交替
+        const dow = now.getDay(); // 0=周日，6=周六
+        if (effectiveAltType(now) === 'big') {
+            if (dow === 0 || dow === 6) return false;
+        } else {
+            if (dow === 0) return false;
+        }
+    }
     const cur = now.getHours() * 60 + now.getMinutes();
     // 不在监控时段内：不计时
     if (!inRange(cur, sitStart, sitEnd)) return false;
@@ -275,6 +348,9 @@ ipcMain.on('set-sit-window', (event, cfg) => {
         sitExclEnabled = !!cfg.excl;
         if (cfg.exclStart) sitExclStart = String(cfg.exclStart);
         if (cfg.exclEnd) sitExclEnd = String(cfg.exclEnd);
+        if (cfg.cycle) sitCycle = String(cfg.cycle);
+        if (cfg.altType === 'small' || cfg.altType === 'big') sitAltType = cfg.altType;
+        if (cfg.altAnchor) sitAltAnchor = String(cfg.altAnchor);
     }
 });
 

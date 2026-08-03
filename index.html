@@ -126,6 +126,29 @@
         .toggle input:checked + .slider { background: var(--success); }
         .toggle input:checked + .slider::before { transform: translateX(16px); }
 
+        /* 胶囊型单选开关（排除周期：关/双休/单休/节假日） */
+        .capsule {
+            display: inline-flex; gap: 2px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 2px;
+        }
+        .capsule button {
+            border: none; background: transparent;
+            color: var(--text2); font-size: 11px; font-weight: 500;
+            padding: 5px 9px; border-radius: 10px; cursor: pointer;
+            transition: background 0.15s, color 0.15s; white-space: nowrap;
+        }
+        .capsule button:hover { color: var(--text); }
+        .capsule button.active {
+            background: var(--accent); color: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        }
+        /* 大小周选中后：按钮变绿、文字变为当前「大/小」，点击在 大/小 间来回切换 */
+        .capsule button.alt-on {
+            background: var(--success); color: #fff;
+            box-shadow: 0 1px 4px rgba(46,204,113,0.4);
+        }
+
         /* 按钮 */
         .btns { display: flex; gap: 8px; }
         .btn {
@@ -296,6 +319,19 @@
                 </div>
                 <label class="toggle"><input type="checkbox" id="exclTog" onchange="save()"><span class="slider"></span></label>
             </div>
+            <div class="set-row set-row-cycle">
+                <div class="info">
+                    <span class="ic">📅</span>
+                    <div><div class="t">排除周期</div></div>
+                </div>
+                <div class="capsule" id="exclCycle">
+                    <button type="button" data-v="off" onclick="setCycle('off')">关</button>
+                    <button type="button" data-v="weekend" onclick="setCycle('weekend')">双休</button>
+                    <button type="button" data-v="sunday" onclick="setCycle('sunday')">单休</button>
+                    <button type="button" data-v="holiday" onclick="setCycle('holiday')">节假日</button>
+                    <button type="button" data-v="altweek" onclick="toggleAltweek()" title="大小周：点击在 大/小 之间来回切换">大小周</button>
+                </div>
+            </div>
         </div>
 
         <div class="btns">
@@ -307,8 +343,8 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        // Electron IPC 通信
-        const { ipcRenderer } = window.require ? window.require('electron') : null;
+        // Electron IPC 通信（非 Electron 环境——如浏览器预览——返回空对象，ipcRenderer 为 undefined，后续 IPC 调用均有 if(ipcRenderer) 保护会自动跳过）
+        const { ipcRenderer } = window.require ? window.require('electron') : {};
 
         // 非 macOS（Windows/Linux）使用原生标题栏，收紧顶部内边距
         if (window.process && process.platform && process.platform !== 'darwin') {
@@ -359,6 +395,8 @@
             sitInterval: 30, restDuration: 5, sound: true, loop: true,
             timeLimit: true, timeStart: '09:00', timeEnd: '18:00',
             exclLimit: false, exclStart: '12:00', exclEnd: '13:00',
+            exclCycle: 'holiday',
+            altType: 'big', altAnchor: '',
             monitoring: false, sitRem: 0, restRem: 0,
             phase: 'idle', standCount: 0, totalSit: 0,
             curDate: todayStr(),
@@ -388,6 +426,7 @@
             if (ipcRenderer) ipcRenderer.send('set-sit-window', {
                 enabled: S.timeLimit, start: S.timeStart, end: S.timeEnd,
                 excl: S.exclLimit, exclStart: S.exclStart, exclEnd: S.exclEnd,
+                cycle: S.exclCycle, altType: S.altType, altAnchor: S.altAnchor,
             });
         }
         function save() {
@@ -410,8 +449,68 @@
                 sound: S.sound, loop: S.loop, standCount: S.standCount, totalSit: S.totalSit,
                 date: S.curDate, timeLimit: S.timeLimit, timeStart: S.timeStart, timeEnd: S.timeEnd,
                 exclLimit: S.exclLimit, exclStart: S.exclStart, exclEnd: S.exclEnd,
+                exclCycle: S.exclCycle, altType: S.altType, altAnchor: S.altAnchor,
             }));
             sendWindow();
+        }
+
+        // 排除周期胶囊开关：单选（关/双休/单休/节假日/大小周）
+        function setCycle(v) {
+            S.exclCycle = v;
+            // 首次进入大小周：默认大周，以本周为锚点
+            if (v === 'altweek' && !S.altAnchor) {
+                S.altType = 'big';
+                S.altAnchor = todayStr();
+            }
+            syncCycleActive();
+            syncAltState();
+            save();
+        }
+
+        // 同步胶囊高亮（大小周不用蓝色 active，由 syncAltState 单独处理为绿色）
+        function syncCycleActive() {
+            document.querySelectorAll('#exclCycle button').forEach(b => {
+                b.classList.toggle('active', S.exclCycle === b.dataset.v && b.dataset.v !== 'altweek');
+            });
+        }
+
+        // 取 d 所在周的周一（周一为一周起点）
+        function mondayOf(d) {
+            const m = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+            return m;
+        }
+        // 大小周：以锚点周为基准，按经过的周数自动顺延交替（偶数周同型，奇数周翻转）
+        function effectiveAltType() {
+            const t = S.altType || 'big';
+            if (!S.altAnchor) return t;
+            const a = mondayOf(new Date()), b = mondayOf(new Date(S.altAnchor + 'T00:00:00'));
+            const weeks = Math.round((a.getTime() - b.getTime()) / (7 * 24 * 3600 * 1000));
+            return Math.abs(weeks) % 2 === 1 ? (t === 'big' ? 'small' : 'big') : t;
+        }
+        // 大小周按钮状态：选中时变绿、文字变为当前「大/小」；未选中显示「大小周」
+        function syncAltState() {
+            const btn = document.querySelector('#exclCycle button[data-v="altweek"]');
+            if (!btn) return;
+            if (S.exclCycle === 'altweek') {
+                btn.textContent = effectiveAltType() === 'big' ? '大周' : '小周';
+                btn.classList.add('alt-on');
+            } else {
+                btn.textContent = '大小周';
+                btn.classList.remove('alt-on');
+            }
+        }
+        // 大小周按钮点击：未选中→选中(默认大)；已选中→在 大/小 间来回切换
+        function toggleAltweek() {
+            if (S.exclCycle !== 'altweek') { setCycle('altweek'); return; }
+            setAlt(effectiveAltType() === 'big' ? 'small' : 'big');
+        }
+        // 设置大小周当前类型：以本周为新锚点重新开始顺延
+        function setAlt(type) {
+            S.altType = type;
+            S.altAnchor = todayStr();
+            syncAltState();
+            save();
         }
 
         function load() {
@@ -433,6 +532,9 @@
                 S.exclLimit = d.exclLimit === true; // 默认关闭
                 S.exclStart = d.exclStart || '12:00';
                 S.exclEnd = d.exclEnd || '13:00';
+                S.exclCycle = ['off','weekend','sunday','holiday','altweek'].indexOf(d.exclCycle) >= 0 ? d.exclCycle : 'holiday';
+                S.altType = d.altType === 'small' ? 'small' : 'big';
+                S.altAnchor = d.altAnchor || '';
                 S.standCount = d.standCount || 0;
                 S.totalSit = d.totalSit || 0;
                 S.curDate = d.date || todayStr();
@@ -444,6 +546,8 @@
             document.getElementById('loopTog').checked = S.loop;
             document.getElementById('timeTog').checked = S.timeLimit;
             document.getElementById('exclTog').checked = S.exclLimit;
+            syncCycleActive();
+            syncAltState();
             const ts = document.getElementById('timeStart');
             const te = document.getElementById('timeEnd');
             if (ts) ts.value = S.timeStart;
@@ -638,7 +742,7 @@
             setTimeout(() => {
                 checkDayRollover();
                 S.standCount = 0; S.totalSit = 0; S.curDate = todayStr();
-                updateStats(); save();
+                updateStats(); syncAltState(); save();
                 toast('新的一天，统计已重置');
                 scheduleMidnightReset();
             }, next - now);
